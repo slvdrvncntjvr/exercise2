@@ -1,5 +1,9 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
+from PIL import Image, ImageTk
+import os
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
 
 RATES = {
     "Residential": {"price": 15.00, "Metro Manila Area": 0.03, "Provincial Area": 0.02},
@@ -58,7 +62,60 @@ add_row("Electric Bill:", elec_bill, row=7, readonly=True)
 add_row("System Charges:", sys_charges, row=8, readonly=True)
 add_row("Total Bill:", total_bill, row=9, readonly=True)
 
-def clear():
+# load images
+eat_img = Image.open(os.path.join(script_dir, "eat.jpg")).resize((200, 200))
+tong_img = Image.open(os.path.join(script_dir, "tong.jpg")).resize((300, 200))
+
+def show_spinning_loader(callback):
+    overlay = tk.Toplevel(root)
+    overlay.title("Computing...")
+    overlay.resizable(False, False)
+    overlay.grab_set()
+
+    canvas = tk.Canvas(overlay, width=220, height=240)
+    canvas.pack()
+
+    angle = [0]
+    photo = [None]
+
+    def spin():
+        rotated = eat_img.rotate(angle[0], resample=Image.BICUBIC, expand=False)
+        photo[0] = ImageTk.PhotoImage(rotated)
+        canvas.delete("all")
+        canvas.create_image(110, 110, image=photo[0])
+        canvas.create_text(110, 225, text="Computing...", font=("Arial", 10))
+        angle[0] = (angle[0] - 15) % 360
+        if angle[0] != 0 and hasattr(overlay, "spinning"):
+            overlay.after(30, spin)
+        else:
+            overlay.destroy()
+            callback()
+
+    overlay.spinning = True
+    overlay.after(1500, lambda: delattr(overlay, "spinning"))
+    spin()
+
+def show_clear_dialog():
+    dialog = tk.Toplevel(root)
+    dialog.title("Are you sure?")
+    dialog.resizable(False, False)
+    dialog.grab_set()
+
+    tong_photo = ImageTk.PhotoImage(tong_img)
+    dialog.tong_photo = tong_photo
+
+    tk.Label(dialog, text="Are you sure?", font=("Arial", 12, "bold")).pack(pady=(10, 5))
+
+    img_frame = tk.Frame(dialog)
+    img_frame.pack(pady=5)
+
+    tk.Button(img_frame, text="No", width=6, font=("Arial", 10),
+              command=dialog.destroy).grid(row=0, column=0, padx=10, pady=10)
+    tk.Label(img_frame, image=tong_photo).grid(row=0, column=1)
+    tk.Button(img_frame, text="Yes", width=6, font=("Arial", 10),
+              command=lambda: [do_clear(), dialog.destroy()]).grid(row=0, column=2, padx=10, pady=10)
+
+def do_clear():
     area_var.set("Default")
     acct_num.set("")
     cust_name.set("")
@@ -70,6 +127,9 @@ def clear():
     elec_bill.set("")
     sys_charges.set("")
     total_bill.set("")
+
+def clear():
+    show_clear_dialog()
 
 def compute():
     if area_var.get() == "Default":
@@ -94,19 +154,22 @@ def compute():
         curr_read.set("")
         return
 
-    area = area_var.get()
-    atype = acct_type.get().strip()
-    rate = RATES[atype]
+    def show_results():
+        area = area_var.get()
+        atype = acct_type.get().strip()
+        rate = RATES[atype]
 
-    kwh = curr - prev
-    ebill = kwh * rate["price"]
-    schg = ebill * rate[area]
-    total = ebill + schg
+        kwh = curr - prev
+        ebill = kwh * rate["price"]
+        schg = ebill * rate[area]
+        total = ebill + schg
 
-    kwh_used.set(str(kwh))
-    elec_bill.set(f"{ebill:.2f}")
-    sys_charges.set(f"{schg:.2f}")
-    total_bill.set(f"{total:.2f}")
+        kwh_used.set(str(kwh))
+        elec_bill.set(f"{ebill:.2f}")
+        sys_charges.set(f"{schg:.2f}")
+        total_bill.set(f"{total:.2f}")
+
+    show_spinning_loader(show_results)
 
 btn_frame = tk.Frame(root)
 btn_frame.grid(row=10, column=0, columnspan=2, pady=10)
